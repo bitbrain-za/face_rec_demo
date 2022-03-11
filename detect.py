@@ -1,10 +1,14 @@
 # Run this on the Nano
 import cv2
 import threading
+from cv2 import ROTATE_90_CLOCKWISE
+from cv2 import ROTATE_90_COUNTERCLOCKWISE
+from cv2 import ROTATE_180
 from deepstack_sdk import ServerConfig, Face
 import time
 import getopt
 import sys
+import requests
 
 class VideoCapture:
     def __init__(self, name):
@@ -32,14 +36,23 @@ def current_milli_time():
 def main(argv):
 
     try:
-        opts, args = getopt.getopt(argv,"i:",["input="])
+        opts, args = getopt.getopt(argv,"h:r:i:",["hook=", "rotation=", "input="])
     except getopt.GetoptError:
+      print('-r <0, 90, 180, 270> Rotation')
       print('-i <rtsp stream uri>')
+      print('-h <wenhook uri for detection>')
       sys.exit(2)
+
+    rotation = 0
+    hook = "" 
 
     for opt, arg in opts:
         if opt in ("-i", "--input"):
             input = arg
+        if opt in ("-r", "--rotation"):
+            rotation = arg
+        if opt in ("-h", "--hook"):
+            hook = arg
 
     capture = VideoCapture(input)
     config = ServerConfig("http://localhost:8080")
@@ -65,13 +78,19 @@ def main(argv):
                     print("Recog on " + str(count) + " objects")
                     for obj in response:
                         cropped = frame[obj.y_min:obj.y_max, obj.x_min:obj.x_max]
+                        if rotation == "90":
+                            cv2.rotate(cropped, cv2.cv2.ROTATE_90_CLOCKWISE)
+                        if rotation == "270":
+                            cv2.rotate(cropped, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
+                        if rotation == "180":
+                            cv2.rotate(cropped, cv2.cv2.ROTATE_180)
                         response = face.recognizeFace(cropped, output=None )
 
                         if len(response.detections) > 0:
                             detection = response.detections[0]
                             if(detection.userid != "unknown"):
                                 print("Spotted: " + detection.userid + " with confidence " + str(detection.confidence))
-                                # OPEN THE DOOR HERE
+                                requests.get(hook)
                     last_recog = now
 
 if __name__ == "__main__":
