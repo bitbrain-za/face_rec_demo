@@ -36,15 +36,19 @@ def current_milli_time():
 def main(argv):
 
     try:
-        opts, args = getopt.getopt(argv,"h:r:i:",["hook=", "rotation=", "input="])
+        opts, args = getopt.getopt(argv,"t:c:h:r:i:",["timer=", "confidence=", "hook=", "rotation=", "input="])
     except getopt.GetoptError:
       print('-r <0, 90, 180, 270> Rotation')
       print('-i <rtsp stream uri>')
-      print('-h <wenhook uri for detection>')
+      print('-t <time in ms between relay triggers>')
+      print('-c <min confidence for trigger>')
+      print('-h <webhook uri for detection>')
       sys.exit(2)
 
     rotation = 0
     hook = "" 
+    c = "0.8"
+    t = "5000"
 
     for opt, arg in opts:
         if opt in ("-i", "--input"):
@@ -53,16 +57,23 @@ def main(argv):
             rotation = arg
         if opt in ("-h", "--hook"):
             hook = arg
+        if opt in ("-c", "--confidence"):
+            c = arg
+        if opt in ("-t", "--timer"):
+            t = arg
 
+    confidence = float(c)
     capture = VideoCapture(input)
     config = ServerConfig("http://localhost:8080")
     face = Face(config)
 
     last_detect = 0
     last_recog = 0
+    last_open = 0
 
     delay_detect = 500   # 200 ms = 5fps
     delay_recog = 1000
+    delay_relay = int(t)
 
     print("Starting")
     while True:
@@ -90,7 +101,10 @@ def main(argv):
                             detection = response.detections[0]
                             if(detection.userid != "unknown"):
                                 print("Spotted: " + detection.userid + " with confidence " + str(detection.confidence))
-                                requests.get(hook)
+                                if(detection.confidence >= confidence) and (now > last_open + delay_relay):
+                                    last_open = now
+                                    print("opening door")
+                                    requests.get(hook)
                     last_recog = now
 
 if __name__ == "__main__":
